@@ -31,73 +31,59 @@ class Yammer extends Client
     private function array_prefix($array, $prefix = '')
     {
         $array = array_flip($array);
+        $array = array_map('sprintf', array_fill(0, count($array), "%s%d"), array_fill(0, count($array), $prefix), $array);
+/*
         array_walk($array, function (&$v, $k, $prefix) {
             $v = sprintf("%s%d", $prefix,$v + 1);
         }, $prefix);
+*/
         return array_flip($array);
     }
 
     public function sendFiles($files)
     {
-        $files      = $this->to_array($files);
-        $requests   = [];
+        $requests  = array_map(function ($file) {
+            return $this->post('/pending_attachments')
+                ->addFile('attachment', $file);
+        }, $this->to_array($files));
 
-        foreach($files as $file)
-        {
-            $requests[$file] = $this->post('/pending_attachments')->addFile('attachment', $file);
-        }
-
-        $responses  = $this->batchSend($requests);
-        $ids        = [];
-
-        foreach($responses as $file => $rs)
-        {
-            if($rs->isOk && ($id = ArrayHelper::getValue($rs->data, 'id')) !== null)
+        $callback   = function ($rs) {
+            if(!($rs->isOk && ($id = ArrayHelper::getValue($rs->data, 'id')) !== null))
             {
-                $ids[$file] = $id;
+                print_r($rs->getHeaders());
+                //\Yii::error(sprintf("[%s %s] failed %d => %s", $method, $uri, $rs->statusCode, $rs->content));
             }
-            else
-            {
-                Yii::error(sprintf("Upload of '%s' failed status code: %s => %s", $file, $rs->statusCode, $rs->content));
-                $ids[$file] = false;
-            }
-        }
+            return $id;
+        };
 
-        return $ids;
+        return $this->batchRequest($requests, $callback);
+    }
+
+    public function sendFile($file)
+    {
+        return array_pop($this->sendFiles($file));
     }
 
     public function deleteFiles($ids)
     {
-        $ids        = $this->to_array($ids);
-        $requests   = [];
+        $requests  = array_map(function ($id) {
+            return $this->delete(sprintf("/uploaded_files/%d", $id));
+        }, $this->to_array($ids));
 
-        foreach($ids as $id)
-        {
-            $requests[$id] = $this->delete(sprintf('/uploaded_files/%d', $id));
-        }
-
-        $responses  = $this->batchSend($requests);
-        $ids        = [];
-        foreach($responses as $id => $rs)
-        {
-            $ids[$id] = $rs->isOk;
-            if(!$rs->isOk)
-            {
-                Yii::error(sprintf("Unable to delete file id: %d => %s - %s", $id, $rs->statusCode, $rs->content));
-            }
-        }
-
-        return $ids;
+        return $this->batchRequest($requests);
     }
 
-    public function sendAnnouncement($body, $title = null, $tags = [], $files = [], $options = [])
+    public function deleteFile($id)
     {
-        return $this->sendMessage($body, $title, $tags, $files, array_merge(
-            $options,
-            [
-                'is_rich_text'  => 'true',
-                'message_type'  => 'announcement',
-            ]));
+        return array_pop($this->deleteFiles($id));
+    }
+
+    public function getAnnouncementOptions()
+    {
+        return [
+            'is_rich_text'  => 'true',
+            'message_type'  => 'announcement',
+        ];
     }
 
     public function sendMessageToNetworks($ids, $body, $title = null, $tags = [], $files = [], $options = [])
@@ -220,5 +206,38 @@ class Yammer extends Client
     //'og_object_type'    => 'image',
     //'og_description'    => 'Linkbynet site web',
     //'og_image'          => 'https://a248.e.akamai.net/assets.github.com/images/modules/dashboard/octofication.png',
+    }
+
+    public function deleteMessages($ids)
+    {
+        $requests  = array_map(function ($id) {
+            return $this->delete(sprintf("/messages/%d", $id));
+        }, $this->to_array($ids));
+
+        return $this->batchRequest($requests);
+    }
+
+    public function deleteMessage($id)
+    {
+        return array_pop($this->deleteMessages($id));
+    }
+
+    public function batchRequest($requests, $callback = null)
+    {
+        $responses  = $this->batchSend($requests);
+
+        if($callback === null)
+        {
+            $callback = function ($rs) {
+                if(!$rs->isOk)
+                {
+                    print_r($rs->getHeaders());
+                    // \Yii::error(sprintf("[%s %s] failed %d => %s", $method, $uri, $rs->statusCode, $rs->content));
+                }
+                return $rs->isOk;
+            };
+        }
+
+        return array_map($callback, $responses);
     }
 }
