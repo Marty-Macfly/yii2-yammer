@@ -17,8 +17,7 @@ or add to "require" section to composer.json
 
 Set your yammer component.
 
-```
-php
+```php
 'components' => [
     'yammer' => [
         'class'   => 'macfly\yammer\components\Yammer',
