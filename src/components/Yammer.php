@@ -256,7 +256,7 @@ class Yammer extends Client
         if($callback === null)
         {
             $callback = function ($rs) {
-                if(!$rs->isOk && ($id = ArrayHelper::getValue($rs->data, 'id')) !== null))
+                if(!$rs->isOk && ($id = ArrayHelper::getValue($rs->data, 'id')) !== null)
                 {
                     \Yii::error(sprintf("[%s] failed %d => %s", $rs->headers->get('location'), $rs->statusCode, $rs->content));
                 }
