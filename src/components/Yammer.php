@@ -218,6 +218,37 @@ class Yammer extends Client
         return array_pop($this->deleteMessages($id));
     }
 
+    public function getMessagesFromGroups($ids)
+    {
+        $requests  = array_map(function ($id) {
+            return $this->get(sprintf("messages/in_group/%d.json", $id));
+        }, $this->to_array($ids));
+
+        $callback   = function ($rs) {
+            if(!($rs->isOk && ($messages = ArrayHelper::getValue($rs->data, 'messages')) !== null))
+            {
+                \Yii::error(sprintf("[%s] failed %d => %s", $rs->headers->get('location'), $rs->statusCode, $rs->content));
+            }
+            return $messages;
+        };
+
+        return $this->batchRequest($requests, $callback);
+    }
+
+    public function getMessagesFromGroup($id)
+    {
+        return array_pop($this->getMessagesFromGroups($id));
+    }
+
+    public function searchMessageInGroups($ids, $pattern)
+    {
+        $results = array_map(function ($messages) use($pattern) {
+            return array_filter($messages, function ($message) use($pattern) {
+                return count(array_diff_assoc($message, $pattern)) == 0;
+            });
+        }, $this->getMessagesFromGroups($ids));
+    }
+
     public function batchRequest($requests, $callback = null)
     {
         $responses  = $this->batchSend($requests);
@@ -225,7 +256,7 @@ class Yammer extends Client
         if($callback === null)
         {
             $callback = function ($rs) {
-                if(!$rs->isOk)
+                if(!$rs->isOk && ($id = ArrayHelper::getValue($rs->data, 'id')) !== null))
                 {
                     \Yii::error(sprintf("[%s] failed %d => %s", $rs->headers->get('location'), $rs->statusCode, $rs->content));
                 }
