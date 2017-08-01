@@ -242,11 +242,16 @@ class Yammer extends Client
 
     public function searchMessageInGroups($ids, $pattern)
     {
-        $results = array_map(function ($messages) use($pattern) {
+        return array_map(function ($messages) use($pattern) {
             return array_filter($messages, function ($message) use($pattern) {
-                return count(array_diff_assoc($message, $pattern)) == 0;
+                return count(array_diff_assoc($pattern, $message)) == 0;
             });
         }, $this->getMessagesFromGroups($ids));
+    }
+
+    public function searchMessageInGroup($id, $pattern)
+    {
+        return array_pop($this->searchMessageInGroups($id, $pattern));
     }
 
     public function batchRequest($requests, $callback = null)
